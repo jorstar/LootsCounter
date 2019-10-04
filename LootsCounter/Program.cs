@@ -1,23 +1,41 @@
 ﻿using System;
-using TwitchLib;
-using TwitchLib.Models.Client;
-using TwitchLib.Events.Client;
+using LootsCounter.Helpers;
+using LootsCounter.Controllers;
+using LootsCounter.Controllers.Twitch;
+using LootsCounter.Controllers.Loots;
 
 namespace LootsCounter
 {
-    class Program
+    internal class Program
     {
-        static void Main(string[] args)
-        {
-            Settings settings = new Settings();
-            settings.LoadSettings();
+        public static Program ActiveInstance { get; set; }
+        internal Cache Cache { get; }
+        internal Settings Settings { get; }
+        internal ChatBot ChatBot { get; }
+        internal Commands Commands { get; }
+        internal Counter Counter { get; }
+        internal Message MessageHelper { get; }
 
-            TwitchChatBot bot = new TwitchChatBot();
-            bot.Connect();
+        static void Main( string[] args ) {
+            Program p = new Program();
 
-            Console.ReadLine();
+            while ( true )
+            {
+                Console.ReadKey();
+            };
+        }
 
-            bot.Disconnect();
+        public Program() {
+            Cache = new Cache( this );
+            Settings = new Settings( this );
+            ChatBot = new ChatBot( this );
+            Commands = new Commands( this );
+            Counter = new Counter( this );
+            MessageHelper = new Message( this );
+
+            ActiveInstance = this;
+
+            Commands.PrepareCommands();
         }
     }
 }
