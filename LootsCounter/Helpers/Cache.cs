@@ -9,13 +9,13 @@ namespace LootsCounter.Helpers
     /// <summary>  
     ///  Cache everything needed.  
     /// </summary>  
-    internal class Cache : ProgramAccessor
+    internal class Cache : LootsClientAccessor
     {
         public int LootsCount { get; set; }
         public Models.Settings Settings { get; set; }
         public bool ChannelOwnerOnly { get; set; }
 
-        internal Cache( Program program ) : base( program ) {
+        internal Cache( LootsClient lootsClient ) : base( lootsClient ) {
 
         }
     }

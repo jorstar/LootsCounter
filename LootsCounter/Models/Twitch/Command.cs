@@ -13,6 +13,6 @@ namespace LootsCounter.Models.Twitch
     {
         public string Log { get; set; }
         public string Message { get; set; }
-        public Func<string, bool> Execute { get; set; }
+        public Func<string, string, bool> Execute { get; set; }
     }
 }

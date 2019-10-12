@@ -9,11 +9,11 @@ namespace LootsCounter.Controllers.Twitch
     /// <summary>  
     ///  Handle all chat commands.  
     /// </summary>  
-    internal class Commands : ProgramAccessor
+    internal class Commands : LootsClientAccessor
     {
         private Dictionary<string, Command> commands = new Dictionary<string, Command>();
 
-        internal Commands( Program program ) : base( program ) {
+        internal Commands( LootsClient lootsClient ) : base( lootsClient ) {
 
         }
 
@@ -23,7 +23,8 @@ namespace LootsCounter.Controllers.Twitch
                 if( commands.TryGetValue( args[0].ToLower(), out Command com ) ) {
                     
                     string execute = args.Length > 1 ? args[1] : "";
-                    bool executed = com.Execute.Invoke( execute );
+                    string extra = args.Length > 2 ? args[2] : "";
+                    bool executed = com.Execute.Invoke( execute, extra );
 
                     if ( !executed ) {
                         return;
@@ -32,7 +33,7 @@ namespace LootsCounter.Controllers.Twitch
                     Log.Info( com.Log );
 
                     if( !string.IsNullOrEmpty( com.Message ) ) {                        
-                        Program.ChatBot.SendMessage( com.Message );
+                        LootsClient.ChatBot.SendMessage( com.Message );
                     }
                 }
             }
@@ -42,16 +43,16 @@ namespace LootsCounter.Controllers.Twitch
         }
 
         public void PrepareCommands() {
-            commands.Add( Program.Cache.Settings.AddRemoveLootsCommand.ToLower(), new Command {
+            commands.Add( LootsClient.Cache.Settings.AddRemoveLootsCommand.ToLower(), new Command {
                 Log = "Successfully mutated the loots count",
-                Message = Program.ActiveInstance.Cache.Settings.MutationResponse,
-                Execute = Program.ActiveInstance.Counter.Mutate
+                Message = LootsClient.ActiveInstance.Cache.Settings.MutationResponse,
+                Execute = LootsClient.ActiveInstance.Counter.Mutate
             } );
 
             commands.Add( "lootscount", new Command {
                 Log = "Show loots command successfull",
                 Message = "",
-                Execute = Program.ActiveInstance.Counter.ShowCount
+                Execute = LootsClient.ActiveInstance.Counter.ShowCount
             } );
         }
     }

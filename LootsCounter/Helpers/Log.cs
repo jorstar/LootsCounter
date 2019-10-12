@@ -74,9 +74,8 @@ namespace LootsCounter.Helpers
             try {
                 string text = $"[{DateTime.UtcNow}] {message}";
 
-                using( StreamWriter streamWriter = new StreamWriter( LogFile ) ) {
+                using( StreamWriter streamWriter = File.AppendText( LogFile ) ) {
                     streamWriter.WriteLine( text );
-                    streamWriter.Close();
                 }
             }
             catch( Exception Ex ) {
@@ -98,7 +97,6 @@ namespace LootsCounter.Helpers
                 using( StreamWriter streamWriter = new StreamWriter( LogFile ) ) {
                     streamWriter.WriteLine( text );
                     streamWriter.WriteLine( exception );
-                    streamWriter.Close();
                 }
             }
             catch( Exception Ex ) {
@@ -135,7 +133,7 @@ namespace LootsCounter.Helpers
             else {
                 AcceptOrDeny();
             }
-
+            Console.WriteLine( "" );
             return val;
         }
     }

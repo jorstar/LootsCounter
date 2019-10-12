@@ -9,23 +9,23 @@ namespace LootsCounter.Controllers.Loots
     ///  Loots counter
     ///  all loots mutations happen here.  
     /// </summary>  
-    class Counter : ProgramAccessor
+    class Counter : LootsClientAccessor
     {
         private string LootsFile { get; } = "LootsCounter.txt";
 
-        internal Counter( Program program ) : base( program ) {
-            if( !File.Exists( LootsFile ) ) {
+        internal Counter( LootsClient lootsClient ) : base( lootsClient ) {
+            if ( !File.Exists( LootsFile ) ) {
                 ResetCount();
             }
             else {
                 Log.Info( "Loots file found, Do you want to continue the current count ? [Y / N]" );
-                if( Log.AcceptOrDeny() ) {
+                if ( Log.AcceptOrDeny() ) {
                     LoadFile();
                 }
                 else {
                     Log.Info( "Reset the loots count to 0" );
                     ResetCount();
-                    Log.Info( $"The current loots count is: {Program.Cache.LootsCount}" );
+                    Log.Info( $"The current loots count is: {LootsClient.Cache.LootsCount}" );
                 }
             }
         }
@@ -34,57 +34,86 @@ namespace LootsCounter.Controllers.Loots
         ///  Handle loots message that came from chatbot.  
         /// </summary>  
         public void HandleLoots( string message ) {
-            if( message.Contains( Program.Cache.Settings.LootsLink ) ) {
+            if ( message.Contains( LootsClient.Cache.Settings.LootsLink ) ) {
                 Log.Info( "Loots link shown in chat!" );
             }
             else {
                 Add();
-                Log.Info( $"The current loots count is: {Program.Cache.LootsCount}" );
+                Log.Info( $"The current loots count is: {LootsClient.Cache.LootsCount}" );
             }
         }
 
-        public bool Mutate( string addremove ) {
-            if( string.IsNullOrEmpty( addremove ) ) {
+        public bool Mutate( string addremove, string extra ) {
+            try {
+                if ( string.IsNullOrEmpty( addremove ) ) {
+                    return false;
+                }
+
+                int count;
+                bool tryparse = int.TryParse( extra, out count );
+                if (!tryparse) {
+                    count = 1;
+                }
+
+                bool ret;
+                switch ( addremove.ToLower() ) {
+                    case "add":
+                    case "+1":
+                    case "+":
+                        Add( count );
+                        ret = true;
+                        break;
+                    case "remove":
+                    case "-1":
+                    case "-":
+                    case "del":
+                    case "delete":
+                        Remove( count );
+                        ret = true;
+                        break;
+                    case "set":
+                        if ( tryparse ) {
+                            SetCount( count );
+                            ret = true;
+                        }
+                        else {
+                            ret = false;
+                        }
+
+                        break;
+                    case "reset":
+                        ResetCount();
+                        LootsClient.ChatBot.SendMessage( LootsClient.Cache.Settings.ResetCommandResponse );
+                        ret = true;
+                        break;
+                    default:
+                        ret = false;
+                        break;
+                }
+
+                Log.Info( $"Loots count is now at {LootsClient.Cache.LootsCount}" );
+                return ret;
+            }
+            catch ( Exception Ex ) {
+                Log.Error( "Mutate", Ex );
                 return false;
             }
+        }
 
-            bool ret;
-            switch( addremove.ToLower() ) {
-            case "add":
-            case "+1":
-            case "+":
-                Add();
-                ret = true;
-                break;
-            case "remove":
-            case "-1":
-            case "-":
-            case "del":
-            case "delete":
-                Remove();
-                ret = true;
-                break;
-            case "reset":
-                ResetCount();
-                Program.ChatBot.SendMessage( Program.Cache.Settings.ResetCommandResponse );
-                ret = true;
-                break;
-            default:
-                ret = false;
-                break;
-            }
+        private void SetCount( int count ) {
+            Log.Info( $"Setting count from {LootsClient.Cache.LootsCount} to {count}" );
+            LootsClient.Cache.LootsCount = count;
+            WriteFile();
 
-            Log.Info( $"Loots count is now at {Program.Cache.LootsCount}" );
-            return ret;
         }
 
         public string GetCount() {
-            return Program.Cache.Settings.ResetCounter ? $"{ Program.Cache.LootsCount} / { Program.Cache.Settings.ResetAtCount}" : Program.Cache.LootsCount.ToString();
+            return LootsClient.Cache.Settings.ResetCounter ? $"{ LootsClient.Cache.LootsCount} / { LootsClient.Cache.Settings.ResetAtCount}" : LootsClient.Cache.LootsCount.ToString();
         }
-        public bool ShowCount( string s = "" ) {
+        public bool ShowCount( string s = "", string extra = "" ) {
 
             Log.Info( $"The current loots count is {GetCount()}" );
-            Program.ChatBot.SendMessage(Program.Cache.Settings.LootsCountResponse);
+            LootsClient.ChatBot.SendMessage( LootsClient.Cache.Settings.LootsCountResponse );
 
             return true;
         }
@@ -95,13 +124,13 @@ namespace LootsCounter.Controllers.Loots
         ///  the same as the reset count then reset the count
         ///  and send a chat message.
         /// </summary>  
-        public void Add() {
-            Program.Cache.LootsCount++;
+        public void Add(int count = 1) {
+            LootsClient.Cache.LootsCount+= count;
             WriteFile();
 
-            if( Program.Cache.Settings.ResetCounter && Program.Cache.LootsCount == Program.Cache.Settings.ResetAtCount ) {
+            if ( LootsClient.Cache.Settings.ResetCounter && LootsClient.Cache.LootsCount == LootsClient.Cache.Settings.ResetAtCount ) {
                 ResetCount();
-                Program.ChatBot.SendMessage( Program.Cache.Settings.ResetMessage );
+                LootsClient.ChatBot.SendMessage( LootsClient.Cache.Settings.ResetMessage );
             }
 
         }
@@ -109,16 +138,16 @@ namespace LootsCounter.Controllers.Loots
         /// <summary>  
         ///  remove 1 from loots count.
         /// </summary>  
-        public void Remove() {
-            if( Program.Cache.LootsCount == 0 && Program.Cache.Settings.ResetCounter ) {
-                Program.Cache.LootsCount = Program.Cache.Settings.ResetAtCount - 1;
+        public void Remove( int count = 1 ) {
+            if ( (LootsClient.Cache.LootsCount == 0 || ( LootsClient.Cache.LootsCount - count ) < 0) && LootsClient.Cache.Settings.ResetCounter ) {
+                LootsClient.Cache.LootsCount = LootsClient.Cache.LootsCount - count + LootsClient.Cache.Settings.ResetAtCount ;
                 WriteFile();
                 Log.Info( "Reverted back and removed 1" );
             }
-            else if( Program.Cache.LootsCount != 0 ) {
-                Program.Cache.LootsCount--;
+            else if ( LootsClient.Cache.LootsCount != 0 && (LootsClient.Cache.LootsCount - count) >= 0 ) {
+                LootsClient.Cache.LootsCount -= count;
                 WriteFile();
-                Log.Info( "Removed 1 from Loots Count" );
+                Log.Info( $"Removed {count} from Loots Count" );
             }
             else {
                 Log.Info( "Cant remove when counter is at 0" );
@@ -129,7 +158,7 @@ namespace LootsCounter.Controllers.Loots
         ///  Reset the loots count.  
         /// </summary>  
         private void ResetCount() {
-            Program.Cache.LootsCount = 0;
+            LootsClient.Cache.LootsCount = 0;
             WriteFile();
             Log.Info( "Loots count has been reset!" );
         }
@@ -138,22 +167,22 @@ namespace LootsCounter.Controllers.Loots
         ///  Load the loots file.  
         /// </summary>  
         private void LoadFile() {
-            if( !File.Exists( LootsFile ) ) {
+            if ( !File.Exists( LootsFile ) ) {
                 Log.Info( $"{LootsFile} does not exist, Creating file." );
                 ResetCount();
             }
             else {
                 try {
                     string LootsCountText = "";
-                    using( StreamReader readtext = new StreamReader( LootsFile ) ) {
+                    using ( StreamReader readtext = new StreamReader( LootsFile ) ) {
                         LootsCountText = readtext.ReadLine();
                     }
 
-                    Program.Cache.LootsCount = Convert.ToInt16( Regex.Match( LootsCountText.Split( '/' )[0].Trim(), @"\d+" ).Value );
+                    LootsClient.Cache.LootsCount = Convert.ToInt16( Regex.Match( LootsCountText.Split( '/' )[0].Trim(), @"\d+" ).Value );
 
-                    Log.Info( $"Original Loots Loaded. Loots is now set to {Program.Cache.LootsCount}" );
+                    Log.Info( $"Original Loots Loaded. Loots is now set to {LootsClient.Cache.LootsCount}" );
                 }
-                catch( Exception Ex ) {
+                catch ( Exception Ex ) {
                     Log.Error( "Loots Counter LoadFile", Ex );
                     Log.CloseProgram();
                 }
@@ -165,12 +194,12 @@ namespace LootsCounter.Controllers.Loots
         /// </summary>  
         private void WriteFile() {
             try {
-                using( StreamWriter sw = new StreamWriter( LootsFile ) ) {
-                    sw.WriteLine( $"{Program.Cache.Settings.ScreenText} {Program.Cache.LootsCount} / {Program.Cache.Settings.ResetAtCount}" );
+                using ( StreamWriter sw = new StreamWriter( LootsFile ) ) {
+                    sw.WriteLine( $"{LootsClient.Cache.Settings.ScreenText} {LootsClient.Cache.LootsCount} / {LootsClient.Cache.Settings.ResetAtCount}" );
                 }
                 Log.Info( "Wrote loots to file." );
             }
-            catch( Exception Ex ) {
+            catch ( Exception Ex ) {
                 Log.Error( "Error Writing loots file", Ex );
                 Log.CloseProgram();
             }

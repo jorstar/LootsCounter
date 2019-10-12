@@ -1,11 +1,12 @@
 ﻿
 using LootsCounter.Helpers;
 using System;
+using System.Threading;
 using System.Web;
-using TwitchLib;
-using TwitchLib.Events.Client;
-using TwitchLib.Models.Client;
-using TwitchLib.Services;
+using TwitchLib.Client;
+using TwitchLib.Client.Events;
+using TwitchLib.Client.Models;
+using TwitchLib.Communication.Events;
 
 namespace LootsCounter.Controllers.Twitch
 {
@@ -13,11 +14,13 @@ namespace LootsCounter.Controllers.Twitch
     ///  Chatbot handler for the loots.
     ///  here is everything that happens in chat.
     /// </summary>  
-    internal class ChatBot : ProgramAccessor
+    internal class ChatBot : LootsClientAccessor
     {
         public TwitchClient Client;
-        internal ChatBot( Program program ) : base( program ) {
-            Connect();           
+        private int connectionRetries = 0;
+        private string channel;
+        internal ChatBot( LootsClient lootsClient ) : base( lootsClient ) {
+            Connect();
         }
 
         /// <summary>  
@@ -25,13 +28,16 @@ namespace LootsCounter.Controllers.Twitch
         /// </summary>  
         private void Connect() {
             try {
-                ConnectionCredentials credentials = new ConnectionCredentials( Program.Cache.Settings.BotUser, Program.Cache.Settings.BotOauth );
-                Client = new TwitchClient( credentials, Program.Cache.Settings.ChannelName, logging: false );
-                Client.ChatThrottler = new MessageThrottler( 20 / 2, TimeSpan.FromSeconds( 30 ) );
+                ConnectionCredentials credentials = new ConnectionCredentials( LootsClient.Cache.Settings.BotUser, LootsClient.Cache.Settings.BotOauth );
+                Client = new TwitchClient();
+                Client.Initialize( credentials, LootsClient.Cache.Settings.ChannelName );
+                Client.OnJoinedChannel += OnChannelJoined;
                 Client.OnConnectionError += OnConnectionError;
                 Client.OnMessageReceived += OnMessageRecieved;
+                Client.OnConnected += OnConnected;
+                Client.OnDisconnected += OnDisconnected;
                 Client.Connect();
-                Log.Info($"Connected as {Program.Cache.Settings.BotUser} to channel {Program.Cache.Settings.ChannelName}");
+
             }
             catch( Exception Ex ) {
                 Log.Error( "Error in Connect", Ex );
@@ -40,12 +46,35 @@ namespace LootsCounter.Controllers.Twitch
 
         }
 
+        private void OnConnected( object sender, OnConnectedArgs e ) {
+            Log.Info($"Bot connected to chat: {e.AutoJoinChannel}");
+        }
+
+        private void OnChannelJoined( object sender, OnJoinedChannelArgs e ) {
+            Log.Info($"Bot joined {e.Channel}");
+
+            channel = e.Channel;
+        }
+        private void OnDisconnected( object sender, OnDisconnectedEventArgs e ) {
+            try {
+                if( connectionRetries < 10 ) {
+                    Log.Warning( "Chatbot disconnected trying to reconnect." );
+                    connectionRetries++;
+                    Log.Info( $"Reconnecting {connectionRetries}" );
+                    Client.Reconnect();
+                }
+            }
+            catch( Exception Ex ) {
+                Log.Error( "OnDisconnected", Ex );
+            }
+        }
+
 
         /// <summary>  
         ///  function for error on connection.  
         /// </summary>  
         private void OnConnectionError( object sender, OnConnectionErrorArgs e ) {
-            Log.Error( $"[chatbot connect error] {e.Error}" );
+            Log.Error( $"[chatbot connect error] {e.Error.Message}" );
             Log.CloseProgram();
         }
 
@@ -55,15 +84,15 @@ namespace LootsCounter.Controllers.Twitch
         private void OnMessageRecieved( object sender, OnMessageReceivedArgs e ) {
             try {
                 if( e.ChatMessage.Message[0] == '!' && IsUserAllowed( e.ChatMessage ) ) {
-                    Program.Commands.HandleChatCommand( e.ChatMessage.Message.Remove( 0, 1 ) );
+                    LootsClient.Commands.HandleChatCommand( e.ChatMessage.Message.Remove( 0, 1 ) );
                 }
 
-                if( e.ChatMessage.Username.ToLower() != Program.Cache.Settings.LootsBotUser.ToLower() ) {
+                if( e.ChatMessage.Username.ToLower() != LootsClient.Cache.Settings.LootsBotUser.ToLower() ) {
                     return;
                 }
 
                 if( e.ChatMessage.Message.ToLower().Contains( "https://loots.com/" ) ) {
-                    Program.Counter.HandleLoots( e.ChatMessage.Message.ToLower() );
+                    LootsClient.Counter.HandleLoots( e.ChatMessage.Message.ToLower() );
                 }
             }
             catch( Exception Ex ) {
@@ -75,13 +104,13 @@ namespace LootsCounter.Controllers.Twitch
         /// Check if user is allowed.  
         /// </summary>  
         private bool IsUserAllowed( ChatMessage message ) {
-            if( message.IsBroadcaster && Program.Cache.Settings.UseChannelOwner) {
+            if( message.IsBroadcaster && LootsClient.Cache.Settings.UseChannelOwner ) {
                 return true;
             }
-            else if( message.IsModerator && Program.Cache.Settings.UseModerators ) {
+            else if( message.IsModerator && LootsClient.Cache.Settings.UseModerators ) {
                 return true;
             }
-            else if( message.IsBroadcaster && Program.Cache.ChannelOwnerOnly ) {
+            else if( message.IsBroadcaster && LootsClient.Cache.ChannelOwnerOnly ) {
                 return true;
             }
             else {
@@ -93,9 +122,9 @@ namespace LootsCounter.Controllers.Twitch
         ///  Send message to chat.  
         /// </summary>  
         public void SendMessage( string message ) {
-            message = Program.MessageHelper.ReplacePlaceholders( message );
+            message = LootsClient.MessageHelper.ReplacePlaceholders( message );
             message = HttpUtility.HtmlEncode( message );
-            Client.SendMessage( message );
+            Client.SendMessage( channel, message );
         }
     }
 }

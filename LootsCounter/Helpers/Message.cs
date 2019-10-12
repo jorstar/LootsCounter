@@ -3,12 +3,12 @@ using System.Collections.Generic;
 
 namespace LootsCounter.Helpers
 {
-    internal class Message : ProgramAccessor
+    internal class Message : LootsClientAccessor
     {
         private Dictionary<string, Func<string>> placeHolders = new Dictionary<string, Func<string>>();
 
-        internal Message( Program program ) : base( program ) {
-            placeHolders.Add( "[lootscount]", program.Counter.GetCount );
+        internal Message( LootsClient lootsClient ) : base( lootsClient ) {
+            placeHolders.Add( "[lootscount]", lootsClient.Counter.GetCount );
         }
 
         internal string ReplacePlaceholders( string message ) {

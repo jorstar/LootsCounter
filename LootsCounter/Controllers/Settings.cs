@@ -9,18 +9,18 @@ namespace LootsCounter.Controllers
     /// <summary>  
     ///  Controller for settings.  
     /// </summary>  
-    internal class Settings : ProgramAccessor
+    internal class Settings : LootsClientAccessor
     {
         private string SettingsFile { get; } = "Config.xml";
 
-        internal Settings( Program program ) : base( program ) {
+        internal Settings( LootsClient lootsClient ) : base( lootsClient ) {
             if( !File.Exists( SettingsFile ) ) {
                 LoadDefault();
             }
 
             Models.Settings settings = ReadConfig();
-            program.Cache.Settings = settings;
-            program.Cache.ChannelOwnerOnly = (settings.UseChannelOwner == true && settings.UseModerators == false || settings.UseChannelOwner == false && settings.UseModerators == false);
+            lootsClient.Cache.Settings = settings;
+            lootsClient.Cache.ChannelOwnerOnly = (settings.UseChannelOwner == true && settings.UseModerators == false || settings.UseChannelOwner == false && settings.UseModerators == false);
         }
 
         /// <summary>  
