@@ -1,12 +1,13 @@
 ﻿
 using LootsCounter.Helpers;
 using System;
-using System.Threading;
 using System.Web;
 using TwitchLib.Client;
 using TwitchLib.Client.Events;
 using TwitchLib.Client.Models;
-using TwitchLib.Communication.Events;
+using TwitchLib.Communication.Clients;
+using TwitchLib.Communication.Enums;
+using TwitchLib.Communication.Models;
 
 namespace LootsCounter.Controllers.Twitch
 {
@@ -17,6 +18,7 @@ namespace LootsCounter.Controllers.Twitch
     internal class ChatBot : LootsClientAccessor
     {
         public TwitchClient Client;
+        public WebSocketClient Websocket;
         private int connectionRetries = 0;
         private string channel;
         internal ChatBot( LootsClient lootsClient ) : base( lootsClient ) {
@@ -29,15 +31,21 @@ namespace LootsCounter.Controllers.Twitch
         private void Connect() {
             try {
                 ConnectionCredentials credentials = new ConnectionCredentials( LootsClient.Cache.Settings.BotUser, LootsClient.Cache.Settings.BotOauth );
-                Client = new TwitchClient();
+                
+                ClientOptions clientOptions = new ClientOptions();
+                clientOptions.ClientType = ClientType.Chat;
+                clientOptions.MessagesAllowedInPeriod = 50;
+                Websocket = new WebSocketClient( clientOptions );
+
+                Client = new TwitchClient( Websocket );
                 Client.Initialize( credentials, LootsClient.Cache.Settings.ChannelName );
+                
                 Client.OnJoinedChannel += OnChannelJoined;
                 Client.OnConnectionError += OnConnectionError;
                 Client.OnMessageReceived += OnMessageRecieved;
                 Client.OnConnected += OnConnected;
-                Client.OnDisconnected += OnDisconnected;
+                
                 Client.Connect();
-
             }
             catch( Exception Ex ) {
                 Log.Error( "Error in Connect", Ex );
@@ -47,26 +55,13 @@ namespace LootsCounter.Controllers.Twitch
         }
 
         private void OnConnected( object sender, OnConnectedArgs e ) {
-            Log.Info($"Bot connected to chat: {e.AutoJoinChannel}");
+            Log.Info($"Bot connected to chat");
         }
 
         private void OnChannelJoined( object sender, OnJoinedChannelArgs e ) {
             Log.Info($"Bot joined {e.Channel}");
 
             channel = e.Channel;
-        }
-        private void OnDisconnected( object sender, OnDisconnectedEventArgs e ) {
-            try {
-                if( connectionRetries < 10 ) {
-                    Log.Warning( "Chatbot disconnected trying to reconnect." );
-                    connectionRetries++;
-                    Log.Info( $"Reconnecting {connectionRetries}" );
-                    Client.Reconnect();
-                }
-            }
-            catch( Exception Ex ) {
-                Log.Error( "OnDisconnected", Ex );
-            }
         }
 
 
